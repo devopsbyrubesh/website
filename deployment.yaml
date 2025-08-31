@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-website-deployment
+spec:
+  replicas: 2 # As per requirement, create 2 pods
+  selector:
+    matchLabels:
+      app: my-website
+  template:
+    metadata:
+      labels:
+        app: my-website
+    spec:
+      containers:
+      - name: my-website-container
+        image: rubeshdevops/my-website-app:latest # IMPORTANT: Replace with your Docker Hub username and repo name
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-website-service
+spec:
+  type: NodePort # Expose the service outside the cluster
+  selector:
+    app: my-website
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30008 # As per requirement, use port 30008
