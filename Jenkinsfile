@@ -3,22 +3,22 @@ pipeline {
     
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        IMAGE_NAME = 'rubeshdevops/my-website-app'
-        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        DOCKER_IMAGE_NAME = "rubeshdevops/my-website-app"
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'
     }
     
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/devopsbyrubesh/website.git'
+                git 'https://github.com/devopsbyrubesh/website.git'
             }
         }
         
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker image: ${IMAGE_NAME}:${BUILD_NUMBER}"
-                    sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
+                    echo "Building Docker image: ${DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
+                    sh "docker build -t ${DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER} ."
                 }
             }
         }
@@ -27,11 +27,10 @@ pipeline {
             steps {
                 script {
                     echo "Logging into Docker Hub..."
-                    // Fixed: Using single quotes to avoid Groovy interpolation security warning
-                    sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                    sh "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
                     
                     echo "Pushing Docker image..."
-                    sh "docker push ${IMAGE_NAME}:${BUILD_NUMBER}"
+                    sh "docker push ${DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
                 }
             }
         }
@@ -40,25 +39,10 @@ pipeline {
             steps {
                 script {
                     echo "Deploying to Kubernetes..."
-                    
-                    // Update deployment.yml with new image
-                    sh "sed -i 's|image: .*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|' deployment.yml"
-                    
-                    // Option 1: Using kubeconfig credentials (recommended)
-                    withCredentials([kubeconfigFile(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                        sh 'kubectl apply -f deployment.yml'
-                    }
-                    
-                    // Option 2: If you don't have kubeconfig, use this instead:
-                    // withCredentials([string(credentialsId: 'k8s-token', variable: 'K8S_TOKEN')]) {
-                    //     sh '''
-                    //         kubectl config set-credentials jenkins --token=$K8S_TOKEN
-                    //         kubectl config set-cluster k8s-cluster --server=https://your-k8s-api-server --insecure-skip-tls-verify=true
-                    //         kubectl config set-context jenkins-context --cluster=k8s-cluster --user=jenkins
-                    //         kubectl config use-context jenkins-context
-                    //         kubectl apply -f deployment.yml
-                    //     '''
-                    // }
+                    // We need to update the image tag in the deployment file
+                    sh "sed -i 's|image: .*|image: ${DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}|' deployment.yml"
+                    // Apply the configuration, skipping TLS verification
+                    sh 'kubectl apply -f deployment.yml --insecure-skip-tls-verify'
                 }
             }
         }
@@ -67,13 +51,7 @@ pipeline {
     post {
         always {
             echo 'Pipeline finished.'
-            sh 'docker logout'
-        }
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Check the logs above.'
+            sh 'docker logout' // Clean up login session
         }
     }
 }
