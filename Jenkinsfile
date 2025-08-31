@@ -41,8 +41,8 @@ pipeline {
                     echo "Deploying to Kubernetes..."
                     // We need to update the image tag in the deployment file
                     sh "sed -i 's|image: .*|image: ${DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}|' deployment.yml"
-                    // Apply the configuration
-                    sh 'kubectl apply -f deployment.yml'
+                    // Apply the configuration, skipping TLS verification
+                    sh 'kubectl apply -f deployment.yml --insecure-skip-tls-verify'
                 }
             }
         }
